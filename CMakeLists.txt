@@ -165,6 +165,11 @@ if(BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
+option(BUILD_CLOVER "Build clover code" ON)
+if(BUILD_CLOVER)
+  add_subdirectory(clover)
+endif()
+
 option(BUILD_DOCUMENTATION "Build documentation" OFF)
 if(BUILD_DOCUMENTATION)
   add_subdirectory(doc)
@@ -199,12 +204,14 @@ file(GLOB_RECURSE SOURCES
   src/*.cpp
   examples/*.cpp
   common/*.cpp
+  clover/*.cpp
 )
 file(GLOB_RECURSE HEADERS
   include/*.h
   src/*.h
   examples/*.h
   common/*.h
+  clover/*.h
 )
 file(GLOB_RECURSE TEST_FILES
   test/*.h
