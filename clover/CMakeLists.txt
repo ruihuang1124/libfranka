@@ -21,15 +21,17 @@ add_library(clover_common STATIC
 target_link_libraries(clover_common PUBLIC Franka::Franka Eigen3::Eigen3)
 
 set(CLOVER
-generate_cartesian_circular_motion
-)
+        generate_cartesian_circular_motion_left
+        generate_cartesian_circular_motion_right
+        )
 
 foreach(example ${CLOVER})
   add_executable(${example} ${example}.cpp)
   target_link_libraries(${example} Franka::Franka clover_common Eigen3::Eigen3)
 endforeach()
 
-target_link_libraries(generate_cartesian_circular_motion Threads::Threads)
+target_link_libraries(generate_cartesian_circular_motion_left Threads::Threads)
+target_link_libraries(generate_cartesian_circular_motion_right Threads::Threads)
 # target_link_libraries(motion_with_control Poco::Foundation)
 
 include(GNUInstallDirs)

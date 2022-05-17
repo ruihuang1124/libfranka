@@ -36,11 +36,11 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
  */
 
 int main(int argc, char** argv) {
-  // Check whether the required arguments were passed.
-  if (argc != 2) {
-    std::cerr << "Usage: " << argv[0] << " <robot-hostname>" << std::endl;
-    return -1;
-  }
+  //  // Check whether the required arguments were passed.
+  //  if (argc != 2) {
+  //    std::cerr << "Usage: " << argv[0] << " <robot-hostname>" << std::endl;
+  //    return -1;
+  //  }
   // Set and initialize trajectory parameters.
   const double radius = 0.05;
   const double vel_max = 0.25;
@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
 
   try {
     // Connect to robot.
-    franka::Robot robot(argv[1]);
+    franka::Robot robot("192.168.0.120");
     setDefaultBehavior(robot);
 
     // First move the robot to a suitable start joint configuration
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     robot.control(cartesian_pose_callback);
 
     // Finally, move the robot to a suitable joint configuration
-    std::array<double, 7> q_final = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    std::array<double, 7> q_final = {{0.613, 0.696, -0.03416, -0.579, 0.0627, 2.129, 0.187}};
     JointMotionGenerator move_to_final_generator(0.1, q_final);
     std::cout << "Robot will move to final joint configuration." << std::endl
               << "Press Enter to continue..." << std::endl;
