@@ -47,8 +47,8 @@ int main(int argc, char** argv) {
   //    return -1;
   //  }
   // Set and initialize trajectory parameters.
-  const double radius = 0.05;
-  const double vel_max = 0.25;
+  const double radius = 0.03;
+  const double vel_max = 0.1;
   const double acceleration_time = 2.0;
   const double run_time = 20.0;
   // Set print rate for comparing commanded vs. measured torques.
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
         print_data.has_data = true;
         print_data.robot_state = state;
         print_data.tau_d_last = tau_d_rate_limited;
-        print_data.gravity = model.gravity(state,customized_gravity_direction);
+        print_data.gravity = model.gravity(state);
         print_data.mutex.unlock();
       }
 
@@ -222,6 +222,10 @@ int main(int argc, char** argv) {
     };
 
     // Start real-time control loop.
+    std::cout << "Robot will execute the cartesian circular shape motion from current pose."
+              << std::endl
+              << "Press Enter to continue..." << std::endl;
+    std::cin.ignore();
     robot.control(impedance_control_callback, cartesian_pose_callback);
 
     // Finally, move the robot to a suitable joint configuration

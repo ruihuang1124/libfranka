@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     robot.control(cartesian_pose_callback);
 
     // Finally, move the robot to a suitable joint configuration
-    std::array<double, 7> q_final = {{-0.778, 0.620, 0.383, -0.464, -0.433, 2.41, 0.845}};
+    std::array<double, 7> q_final = {{-0.778, 0.620, 0.383, -0.4635, -0.433, 2.41, 0.845}};
     JointMotionGenerator move_to_final_generator(0.1, q_final);
     std::cout << "Robot will move to final joint configuration." << std::endl
               << "Press Enter to continue..." << std::endl;

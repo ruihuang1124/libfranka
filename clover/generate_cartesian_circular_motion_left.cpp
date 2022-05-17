@@ -42,8 +42,8 @@ int main(int argc, char** argv) {
   //    return -1;
   //  }
   // Set and initialize trajectory parameters.
-  const double radius = 0.05;
-  const double vel_max = 0.25;
+  const double radius = 0.03;
+  const double vel_max = 0.15;
   const double acceleration_time = 2.0;
   const double run_time = 20.0;
 
