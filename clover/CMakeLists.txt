@@ -23,6 +23,8 @@ target_link_libraries(clover_common PUBLIC Franka::Franka Eigen3::Eigen3)
 set(CLOVER
         generate_cartesian_circular_motion_left
         generate_cartesian_circular_motion_right
+        cartesian_circular_motion_with_joint_impedance_torque_left
+        cartesian_circular_motion_with_joint_impedance_torque_right
         )
 
 foreach(example ${CLOVER})
@@ -32,6 +34,8 @@ endforeach()
 
 target_link_libraries(generate_cartesian_circular_motion_left Threads::Threads)
 target_link_libraries(generate_cartesian_circular_motion_right Threads::Threads)
+target_link_libraries(cartesian_circular_motion_with_joint_impedance_torque_left Threads::Threads)
+target_link_libraries(cartesian_circular_motion_with_joint_impedance_torque_right Threads::Threads)
 # target_link_libraries(motion_with_control Poco::Foundation)
 
 include(GNUInstallDirs)
