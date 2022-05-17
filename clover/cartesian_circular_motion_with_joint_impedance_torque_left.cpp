@@ -106,6 +106,54 @@ int main(int argc, char** argv) {
     franka::Robot robot("192.168.0.120");
     setDefaultBehavior(robot);
 
+    // Load the kinematics and dynamics model.
+    franka::Model model = robot.loadModel();
+    // Set gains for the joint impedance control.
+    // Stiffness
+    const std::array<double, 7> k_gains = {{600.0, 600.0, 600.0, 600.0, 250.0, 150.0, 50.0}};
+    // Damping
+    const std::array<double, 7> d_gains = {{50.0, 50.0, 50.0, 50.0, 30.0, 25.0, 15.0}};
+    // Customized_gravity_direction calculated from the customized installation way. left arm:
+    const std::array<double, 3> customized_gravity_direction = {7.5439190864562988, 6.2554783821105957, -0.4408954679965973};
+
+    // Define callback for the joint torque control loop.
+    std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
+        impedance_control_callback =
+            [&print_data, &model, k_gains, d_gains, customized_gravity_direction](
+                const franka::RobotState& state, franka::Duration /*period*/) -> franka::Torques {
+      // Read current coriolis terms from model.
+      std::array<double, 7> coriolis = model.coriolis(state);
+      std::array<double, 7> normal_gravity = model.gravity(state);
+      std::array<double, 7> customized_gravity = model.gravity(state,customized_gravity_direction);
+
+      // Compute torque command from joint impedance control law.
+      // Note: The answer to our Cartesian pose inverse kinematics is always in state.q_d with one
+      // time step delay.
+      std::array<double, 7> tau_d_calculated;
+      for (size_t i = 0; i < 7; i++) {
+        tau_d_calculated[i] =
+            k_gains[i] * (state.q_d[i] - state.q[i]) - d_gains[i] * state.dq[i] + coriolis[i] + customized_gravity[i] - normal_gravity[i];
+      }
+
+      // The following line is only necessary for printing the rate limited torque. As we activated
+      // rate limiting for the control loop (activated by default), the torque would anyway be
+      // adjusted!
+      std::array<double, 7> tau_d_rate_limited =
+          franka::limitRate(franka::kMaxTorqueRate, tau_d_calculated, state.tau_J_d);
+
+      // Update data to print.
+      if (print_data.mutex.try_lock()) {
+        print_data.has_data = true;
+        print_data.robot_state = state;
+        print_data.tau_d_last = tau_d_rate_limited;
+        print_data.gravity = model.gravity(state);
+        print_data.mutex.unlock();
+      }
+
+      // Send torque command.
+      return tau_d_rate_limited;
+    };
+
     // First move the robot to a suitable joint configuration
     std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
     JointMotionGenerator move_to_start_generator(0.1, q_start);
@@ -113,7 +161,7 @@ int main(int argc, char** argv) {
               << "Please make sure to have the user stop button at hand!" << std::endl
               << "Press Enter to continue..." << std::endl;
     std::cin.ignore();
-    robot.control(move_to_start_generator);
+    robot.control(impedance_control_callback,move_to_start_generator);
     std::cout << "Finished moving to initial joint configuration." << std::endl;
 
     // Set additional parameters always before the control loop, NEVER in the control loop!
@@ -126,8 +174,6 @@ int main(int argc, char** argv) {
         {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}}, {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}},
         {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}}, {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}});
 
-    // Load the kinematics and dynamics model.
-    franka::Model model = robot.loadModel();
 
     std::array<double, 16> initial_pose;
 
@@ -175,53 +221,8 @@ int main(int argc, char** argv) {
       return pose_desired;
     };
 
-    // Set gains for the joint impedance control.
-    // Stiffness
-    const std::array<double, 7> k_gains = {{600.0, 600.0, 600.0, 600.0, 250.0, 150.0, 50.0}};
-    // Damping
-    const std::array<double, 7> d_gains = {{50.0, 50.0, 50.0, 50.0, 30.0, 25.0, 15.0}};
-    // Customized_gravity_direction calculated from the customized installation way. left arm:
-    const std::array<double, 3> customized_gravity_direction = {7.5439190864562988, 6.2554783821105957, -0.4408954679965973};
 
-    // Define callback for the joint torque control loop.
-    std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
-        impedance_control_callback =
-            [&print_data, &model, k_gains, d_gains, customized_gravity_direction](
-                const franka::RobotState& state, franka::Duration /*period*/) -> franka::Torques {
-      // Read current coriolis terms from model.
-      std::array<double, 7> coriolis = model.coriolis(state);
-      std::array<double, 7> normal_gravity = model.gravity(state);
-      std::array<double, 7> customized_gravity = model.gravity(state,customized_gravity_direction);
-
-      // Compute torque command from joint impedance control law.
-      // Note: The answer to our Cartesian pose inverse kinematics is always in state.q_d with one
-      // time step delay.
-      std::array<double, 7> tau_d_calculated;
-      for (size_t i = 0; i < 7; i++) {
-        tau_d_calculated[i] =
-            k_gains[i] * (state.q_d[i] - state.q[i]) - d_gains[i] * state.dq[i] + coriolis[i] + customized_gravity[i] - normal_gravity[i];
-      }
-
-      // The following line is only necessary for printing the rate limited torque. As we activated
-      // rate limiting for the control loop (activated by default), the torque would anyway be
-      // adjusted!
-      std::array<double, 7> tau_d_rate_limited =
-          franka::limitRate(franka::kMaxTorqueRate, tau_d_calculated, state.tau_J_d);
-
-      // Update data to print.
-      if (print_data.mutex.try_lock()) {
-        print_data.has_data = true;
-        print_data.robot_state = state;
-        print_data.tau_d_last = tau_d_rate_limited;
-        print_data.gravity = model.gravity(state);
-        print_data.mutex.unlock();
-      }
-
-      // Send torque command.
-      return tau_d_rate_limited;
-    };
-
-    // Start real-time control loop.
+    // Start executing cartesian circular shape motion control loop.
     std::cout << "Robot will execute the cartesian circular shape motion from current pose."
               << std::endl
               << "Press Enter to continue..." << std::endl;
@@ -229,12 +230,21 @@ int main(int argc, char** argv) {
     robot.control(impedance_control_callback, cartesian_pose_callback);
 
     // Finally, move the robot to a suitable joint configuration
+
+    robot.setCollisionBehavior(
+        {{400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0}},
+        {{400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0}},
+        {{400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0}},
+        {{400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0}},
+        {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}}, {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}},
+        {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}}, {{250.0, 250.0, 250.0, 250.0, 250.0, 250.0}});
+
     std::array<double, 7> q_final = {{0.613, 0.696, -0.03416, -0.579, 0.0627, 2.129, 0.187}};
     JointMotionGenerator move_to_final_generator(0.1, q_final);
     std::cout << "Robot will move to final joint configuration." << std::endl
               << "Press Enter to continue..." << std::endl;
     std::cin.ignore();
-    robot.control(move_to_final_generator);
+    robot.control(impedance_control_callback, move_to_final_generator);
     std::cout << "Finished moving to initial joint configuration." << std::endl;
 
   } catch (const franka::Exception& ex) {
