@@ -55,16 +55,48 @@ int main(int argc, char** argv) {
   //    return -1;
   //  }
   // Set and initialize trajectory parameters.
-  const double radius = 0.03;
-  const double vel_max = 0.15;
-  const double acceleration_time = 2.0;
-  const double run_time = 20.0;
+  const double radius = 0.035;
+  const double vel_max = 0.27;
+  const double acceleration_time = 5.0;
+  const double run_time = 30.0;
+    // Set print rate for comparing commanded vs. measured torques.
+  const double print_rate = 1000.0;
 
   double vel_current = 0.0;
   double angle = 0.0;
   double time = 0.0;
 
+    // Initialize data fields for the print thread.
+  struct {
+    std::mutex mutex;
+    bool has_data;
+    std::array<double, 7> tau_d_last;
+    franka::RobotState robot_state;
+    std::array<double, 7> gravity;
+  } print_data{};
   std::atomic_bool running{true};
+
+  // Start print thread.
+  std::thread print_thread([print_rate, &print_data, &running]() {
+    while (running) {
+      // Sleep to achieve the desired print rate.
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(static_cast<int>((1.0 / print_rate * 1000.0))));
+
+      // Try to lock data to avoid read write collisions.
+      if (print_data.mutex.try_lock()) {
+        if (print_data.has_data) {
+          // Print data to console
+          std::cout << "tau_measured [Nm]: " << print_data.robot_state.tau_J << std::endl
+                    << "Derivative of measured link-side joint torque sensor signals"<< print_data.robot_state.dtau_J<<std::endl
+                    << "Desired Joint Velocity"<<print_data.robot_state.dq_d<<std::endl
+                    << "-----------------------" << std::endl;
+          print_data.has_data = false;
+        }
+        print_data.mutex.unlock();
+      }
+    }
+  });
 
   try {
     // Connect to robot.
@@ -72,7 +104,8 @@ int main(int argc, char** argv) {
     setDefaultBehavior(robot);
 
     // First move the robot to a suitable start joint configuration
-    std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+  //  std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    std::array<double, 7> q_start = {{-0.3, 0.2, 0, -2 * M_PI_4, 0, M_PI_2, 0.6}};
     JointMotionGenerator move_to_start_generator(0.1, q_start);
     std::cout << "WARNING: This example will move the robot! "
               << "Please make sure to have the user stop button at hand!" << std::endl
@@ -100,7 +133,7 @@ int main(int argc, char** argv) {
     Eigen::Vector3d ee_position_franka_base;
 
     // Define callback function to send Desired Cartesian pose goals.
-    auto cartesian_pose_callback = [=, &time, &vel_current, &running, &angle, &initial_pose_arm_frame, &ee_position_world_base, &initial_pose_world_frame, &ee_position_franka_base](
+    auto cartesian_pose_callback = [=, &time, &vel_current, &running, &angle, &initial_pose_arm_frame, &ee_position_world_base, &initial_pose_world_frame, &ee_position_franka_base, &print_data](
                                        const franka::RobotState& robot_state,
                                        franka::Duration period) -> franka::CartesianPose {
       // Update time.
@@ -160,7 +193,15 @@ int main(int argc, char** argv) {
       franka::CartesianPose pose_desired = initial_pose_arm_frame;
       pose_desired.O_T_EE[12] = ee_position_franka_base(0);
       pose_desired.O_T_EE[13] = ee_position_franka_base(1);
-      pose_desired.O_T_EE[14] = ee_position_world_base(2);
+      pose_desired.O_T_EE[14] = ee_position_franka_base(2);
+
+            // Update data to print.
+      if (print_data.mutex.try_lock()) {
+        print_data.has_data = true;
+        print_data.robot_state = robot_state;
+        print_data.mutex.unlock();
+      }
+
 
       // Send desired pose.
       if (time >= run_time + acceleration_time) {
@@ -188,6 +229,9 @@ int main(int argc, char** argv) {
   } catch (const franka::Exception& ex) {
     running = false;
     std::cerr << ex.what() << std::endl;
+  }
+    if (print_thread.joinable()) {
+    print_thread.join();
   }
   return 0;
 }
