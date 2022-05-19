@@ -36,6 +36,13 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
  */
 
 int main(int argc, char** argv) {
+  /*
+   *
+0.626009  0.736984  0.254887        0
+0.12941  0.224144 -0.965926         0
+-0.769003  0.637663 0.0449435       0
+      0         0         0         1
+   */
   // Check whether the required arguments were passed.
   //  if (argc != 2) {
   //    std::cerr << "Usage: " << argv[0] << " <robot-hostname>" << std::endl;
