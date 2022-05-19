@@ -15,8 +15,8 @@
 #include <franka/model.h>
 #include <franka/rate_limiting.h>
 #include <franka/robot.h>
-#include <eigen3/Eigen/Dense>
 #include <cmath>
+#include <eigen3/Eigen/Dense>
 
 #include "clover_common.h"
 
@@ -31,7 +31,6 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
 }
 }  // anonymous namespace
 
-
 /**
  * @example generate_cartesian_circular_motion.cpp
  * An example executes a Cartesian motion in the shape
@@ -40,7 +39,8 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
 
 int main(int argc, char** argv) {
   Eigen::Matrix<double, 4, 4> world_to_customized_transform_;
-  world_to_customized_transform_ << 0.626009, -0.73698, 0.254887, 0, -0.12941, 0.224144, 0.965926, 0, -0.769003, -0.637663, 0.0449435, 0, 0, 0, 0, 1;
+  world_to_customized_transform_ << 0.626009, -0.73698, 0.254887, 0, -0.12941, 0.224144, 0.965926,
+      0, -0.769003, -0.637663, 0.0449435, 0, 0, 0, 0, 1;
   Eigen::Affine3d world_to_install_rotation_transform_A(
       Eigen::Matrix4d::Map(world_to_customized_transform_.data()));
   /*
@@ -59,14 +59,15 @@ int main(int argc, char** argv) {
   const double vel_max = 0.27;
   const double acceleration_time = 5.0;
   const double run_time = 30.0;
-    // Set print rate for comparing commanded vs. measured torques.
+  // Set print rate for comparing commanded vs. measured torques.
   const double print_rate = 1000.0;
 
   double vel_current = 0.0;
   double angle = 0.0;
   double time = 0.0;
+  const double control_loop_time_step = 1e-3;
 
-    // Initialize data fields for the print thread.
+  // Initialize data fields for the print thread.
   struct {
     std::mutex mutex;
     bool has_data;
@@ -88,8 +89,9 @@ int main(int argc, char** argv) {
         if (print_data.has_data) {
           // Print data to console
           std::cout << "tau_measured [Nm]: " << print_data.robot_state.tau_J << std::endl
-                    << "Derivative of measured link-side joint torque sensor signals"<< print_data.robot_state.dtau_J<<std::endl
-                    << "Desired Joint Velocity"<<print_data.robot_state.dq_d<<std::endl
+                    << "Derivative of measured link-side joint torque sensor signals"
+                    << print_data.robot_state.dtau_J << std::endl
+                    << "Desired Joint Velocity" << print_data.robot_state.dq_d << std::endl
                     << "-----------------------" << std::endl;
           print_data.has_data = false;
         }
@@ -104,7 +106,7 @@ int main(int argc, char** argv) {
     setDefaultBehavior(robot);
 
     // First move the robot to a suitable start joint configuration
-  //  std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    //  std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
     std::array<double, 7> q_start = {{-0.3, 0.2, 0, -2 * M_PI_4, 0, M_PI_2, 0.6}};
     JointMotionGenerator move_to_start_generator(0.1, q_start);
     std::cout << "WARNING: This example will move the robot! "
@@ -131,11 +133,14 @@ int main(int argc, char** argv) {
     std::array<double, 16> initial_pose_world_frame;
     Eigen::Vector3d ee_position_world_base;
     Eigen::Vector3d ee_position_franka_base;
+    Eigen::Vector3d last_ee_position_franka_base;
 
     // Define callback function to send Desired Cartesian pose goals.
-    auto cartesian_pose_callback = [=, &time, &vel_current, &running, &angle, &initial_pose_arm_frame, &ee_position_world_base, &initial_pose_world_frame, &ee_position_franka_base, &print_data](
-                                       const franka::RobotState& robot_state,
-                                       franka::Duration period) -> franka::CartesianPose {
+    auto cartesian_pose_callback = [=, &time, &vel_current, &running, &angle,
+                                    &initial_pose_arm_frame, &ee_position_world_base,
+                                    &initial_pose_world_frame, &ee_position_franka_base,
+                                    &print_data](const franka::RobotState& robot_state,
+                                                 franka::Duration period) -> franka::CartesianPose {
       // Update time.
       time += period.toSec();
 
@@ -172,36 +177,36 @@ int main(int argc, char** argv) {
       double delta_y = radius * (1 - std::cos(angle));
       double delta_z = radius * std::sin(angle);
 
-      double delta_x_world = radius * (1-std::cos(angle));
+      double delta_x_world = radius * (1 - std::cos(angle));
       double delta_y_world = radius * std::sin(angle);
       std::array<double, 16> start_pose_world_frame;
       start_pose_world_frame = initial_pose_world_frame;
-      start_pose_world_frame[12] +=delta_x_world;
-      start_pose_world_frame[13] +=delta_y_world;
+      start_pose_world_frame[12] += delta_x_world;
+      start_pose_world_frame[13] += delta_y_world;
 
       Eigen::Affine3d world_to_ee_transform_current(
           Eigen::Matrix4d::Map(start_pose_world_frame.data()));
 
-      Eigen::Affine3d franka_to_ee_transform_current = world_to_install_rotation_transform_A.inverse() * world_to_ee_transform_current;
+      Eigen::Affine3d franka_to_ee_transform_current =
+          world_to_install_rotation_transform_A.inverse() * world_to_ee_transform_current;
 
       ee_position_franka_base = franka_to_ee_transform_current.translation();
 
-//      franka::CartesianPose pose_desired = initial_pose_arm_frame;
-//      pose_desired.O_T_EE[13] += delta_y;
-//      pose_desired.O_T_EE[14] += delta_z;
+      //      franka::CartesianPose pose_desired = initial_pose_arm_frame;
+      //      pose_desired.O_T_EE[13] += delta_y;
+      //      pose_desired.O_T_EE[14] += delta_z;
 
       franka::CartesianPose pose_desired = initial_pose_arm_frame;
       pose_desired.O_T_EE[12] = ee_position_franka_base(0);
       pose_desired.O_T_EE[13] = ee_position_franka_base(1);
       pose_desired.O_T_EE[14] = ee_position_franka_base(2);
 
-            // Update data to print.
+      // Update data to print.
       if (print_data.mutex.try_lock()) {
         print_data.has_data = true;
         print_data.robot_state = robot_state;
         print_data.mutex.unlock();
       }
-
 
       // Send desired pose.
       if (time >= run_time + acceleration_time) {
@@ -211,12 +216,91 @@ int main(int argc, char** argv) {
 
       return pose_desired;
     };
+
+    auto cartesian_velocity_callback = [=, &time, &vel_current, &running, &angle,
+                                    &initial_pose_arm_frame, &ee_position_world_base,
+                                    &initial_pose_world_frame, &ee_position_franka_base,
+                                    &print_data, &last_ee_position_franka_base](const franka::RobotState& robot_state,
+                                                 franka::Duration period) -> franka::CartesianVelocities {
+      // Update time.
+      time += period.toSec();
+
+      if (time == 0.0) {
+        Eigen::Affine3d franka_to_ee_transform(Eigen::Matrix4d::Map(robot_state.O_T_EE_c.data()));
+        Eigen::Affine3d world_to_ee_transform =
+            world_to_install_rotation_transform_A * franka_to_ee_transform;
+        ee_position_world_base = world_to_ee_transform.translation();
+        // Read the initial pose to start the motion from in the first time step.
+        initial_pose_arm_frame = robot_state.O_T_EE_c;
+        initial_pose_world_frame = robot_state.O_T_EE_c;
+        initial_pose_world_frame[12] = ee_position_world_base(0);
+        initial_pose_world_frame[13] = ee_position_world_base(1);
+        initial_pose_world_frame[14] = ee_position_world_base(2);
+        last_ee_position_franka_base = {initial_pose_arm_frame[12],initial_pose_arm_frame[13],initial_pose_arm_frame[14]};
+      }
+
+      // Compute Cartesian velocity.
+      if (vel_current < vel_max && time < run_time) {
+        vel_current += period.toSec() * std::fabs(vel_max / acceleration_time);
+      }
+      if (vel_current > 0.0 && time > run_time) {
+        vel_current -= period.toSec() * std::fabs(vel_max / acceleration_time);
+      }
+      vel_current = std::fmax(vel_current, 0.0);
+      vel_current = std::fmin(vel_current, vel_max);
+
+      // Compute new angle for our circular trajectory.
+      angle += period.toSec() * vel_current / std::fabs(radius);
+      if (angle > 2 * M_PI) {
+        angle -= 2 * M_PI;
+      }
+
+
+      double delta_x_world = radius * (1 - std::cos(angle));
+      double delta_y_world = radius * std::sin(angle);
+      std::array<double, 16> start_pose_world_frame;
+      start_pose_world_frame = initial_pose_world_frame;
+      start_pose_world_frame[12] += delta_x_world;
+      start_pose_world_frame[13] += delta_y_world;
+
+      Eigen::Affine3d world_to_ee_transform_current(
+          Eigen::Matrix4d::Map(start_pose_world_frame.data()));
+
+      Eigen::Affine3d franka_to_ee_transform_current =
+          world_to_install_rotation_transform_A.inverse() * world_to_ee_transform_current;
+
+      ee_position_franka_base = franka_to_ee_transform_current.translation();
+
+
+      franka::CartesianVelocities cartesian_velocities_desired = {0,0,0,0,0,0};
+      double cartesian_velocities_x = (ee_position_franka_base(0) - last_ee_position_franka_base(0))/control_loop_time_step;
+      double cartesian_velocities_y = (ee_position_franka_base(1) - last_ee_position_franka_base(1))/control_loop_time_step;
+      double cartesian_velocities_z = (ee_position_franka_base(2) - last_ee_position_franka_base(2))/control_loop_time_step;
+      cartesian_velocities_desired = {cartesian_velocities_x,cartesian_velocities_y,cartesian_velocities_z,0,0,0};
+
+      // Update data to print.
+      if (print_data.mutex.try_lock()) {
+        print_data.has_data = true;
+        print_data.robot_state = robot_state;
+        print_data.mutex.unlock();
+      }
+
+      // Send desired pose.
+      if (time >= run_time + acceleration_time) {
+        running = false;
+        return franka::MotionFinished(cartesian_velocities_desired);
+      }
+
+      return cartesian_velocities_desired;
+    };
     // Start real-time control loop to execute the cartesian circular shape motion.
     std::cout << "Robot will execute the cartesian circular shape motion from current pose."
               << std::endl
               << "Press Enter to continue..." << std::endl;
     std::cin.ignore();
-    robot.control(cartesian_pose_callback);
+//    robot.control(cartesian_pose_callback);
+    // Control the robot with cartesian_velocities
+    robot.control(cartesian_velocity_callback);
 
     // Finally, move the robot to a suitable joint configuration
     std::array<double, 7> q_final = {{0.613, 0.696, -0.03416, -0.579, 0.0627, 2.129, 0.187}};
@@ -230,7 +314,7 @@ int main(int argc, char** argv) {
     running = false;
     std::cerr << ex.what() << std::endl;
   }
-    if (print_thread.joinable()) {
+  if (print_thread.joinable()) {
     print_thread.join();
   }
   return 0;
