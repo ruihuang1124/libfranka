@@ -55,10 +55,10 @@ int main(int argc, char** argv) {
   //    return -1;
   //  }
   // Set and initialize trajectory parameters.
-  const double radius = 0.035;
-  const double vel_max = 0.27;
+  const double radius = 0.03;
+  const double vel_max = 0.1;
   const double acceleration_time = 5.0;
-  const double run_time = 30.0;
+  const double run_time = 10.0;
   // Set print rate for comparing commanded vs. measured torques.
   const double print_rate = 1000.0;
 
@@ -278,6 +278,8 @@ int main(int argc, char** argv) {
       double cartesian_velocities_z = (ee_position_franka_base(2) - last_ee_position_franka_base(2))/control_loop_time_step;
       cartesian_velocities_desired = {cartesian_velocities_x,cartesian_velocities_y,cartesian_velocities_z,0,0,0};
 
+      last_ee_position_franka_base = ee_position_franka_base;
+
       // Update data to print.
       if (print_data.mutex.try_lock()) {
         print_data.has_data = true;
@@ -287,6 +289,7 @@ int main(int argc, char** argv) {
 
       // Send desired pose.
       if (time >= run_time + acceleration_time) {
+        cartesian_velocities_desired = {0,0,0,0,0,0};
         running = false;
         return franka::MotionFinished(cartesian_velocities_desired);
       }
